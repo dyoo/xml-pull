@@ -1,0 +1,41 @@
+xml-pull: pull-style parsing for large xml files
+
+
+Quick Example
+-------------
+
+    > (require (planet "xml-pull.ss" ("dyoo" "xml-pull.plt" 1 0)))
+
+    > (define a-taffy
+        (start-xml-pull (open-input-string #<<EOF
+<test-xml>
+<person>
+    <name>Sue Rhee</name>
+</person>
+<person>
+    <name>Dan Garcia</name>
+</person>
+<person>
+    <name>Mike Clancy</name>
+</person>
+</test-xml>
+EOF
+                                           )))
+
+At this point, we can either traverse this XML structure by morsels:
+
+    > (pull-morsel a-taffy)
+    #3(struct:start-element test-xml ())
+    > (pull-morsel a-taffy)
+    #3(struct:characters "\n" "")
+    > (pull-morsel a-taffy)
+    #3(struct:start-element person ())
+
+When we see a start-element that is interesting to us, we can _pull-sexp_
+the rest of that element as a normalized SXML fragment:
+
+    > (pull-sexp a-taffy)
+    (person (@) (name (@) "Sue Rhee"))
+
+    
+    
