@@ -1,5 +1,4 @@
 (module xml-pull mzscheme
-  (provide (all-defined))
   (require (lib "etc.ss")
            (lib "struct.ss")
            (lib "pretty.ss")
@@ -8,17 +7,18 @@
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
   
   
-  ;; This is an implementation of a pull-style parser.
+  ;; This is an implementation of a XML pull-style parser.  I'm feeling a little whimsical,
+  ;; so the abstractions here are named after food.
 
   
-  
-  ;; An event is one of the following:
-  (define-struct event () #f)
-  (define-struct (start-element event) (elem-gi attributes namespaces expected-content) #f)
-  (define-struct (end-element event) (elem-gi attributes namespaces) #f)
-  (define-struct (characters event) (s1 s2) #f)
-  (define-struct (exhausted event) ())
-  ;; add more events here as necessary
+  ;; An morsel is one of the following:
+  (define-struct morsel () #f)
+  (define-struct (start-element morsel) (name attributes namespaces expected-content) #f)
+  (define-struct (end-element morsel) (name attributes namespaces) #f)
+  (define-struct (characters morsel) (s1 s2) #f)
+  (define-struct (exhausted morsel) ())
+  ;; Add more morsels here as necessary.  I wonder if we'll want a start-document or end-document
+  ;; morsel?
   
   
   
@@ -27,34 +27,51 @@
   ;;
   ;; (make-pstate c l)
   ;;
-  ;; where c is a boolean and l is an sexp
+  ;; where c is a boolean and l is an sexp.  We set collecting? to true
+  ;; whenever we're interested in accumulating children into the pstate
+  ;; structure.  l is used to accumulate the s-expressions when we're
+  ;; in an interested mood.
   (define-struct pstate (collecting? lst))
   
-  ;; pstate-extend: 
-  (define (pstate-extend a-pstate thing)
+  
+  ;; pstate-extend: pstate sexp -> pstate
+  ;; Accumulates a-sexp into the parser state a-state.
+  (define (pstate-extend a-pstate a-sexp)
     (copy-struct pstate a-pstate 
-                 [pstate-lst (cons thing (pstate-lst a-pstate))]))
+                 [pstate-lst (cons a-sexp (pstate-lst a-pstate))]))
   
   
-  (define normalize-strings ssax:reverse-collect-str-drop-ws)
+  ;; rev-normalize-string-children: (listof sexp) -> (listof sexp)
+  ;; Does a shallow reveral of elements, and concatenates adjacent strings
+  ;; together.
+  (define rev-normalize-string-children ssax:reverse-collect-str-drop-ws)
   
   
-  (define ((new-level-handler yield) elem-gi attributes namespaces expected-content seed)
-    (cond
-      [(pstate-collecting? seed) 
-       (copy-struct pstate seed [pstate-lst '()])]
-      [else
-       (let ([start-collecting?
-              (yield (make-start-element elem-gi attributes namespaces expected-content))])
-         (cond
-           [(eqv? start-collecting? #t)
-            (copy-struct pstate seed 
-                         [pstate-collecting? #t]
-                         [pstate-lst '()])]
-           [else seed]))]))
+  
+  (provide translate-namespace)
+  ;; translate-namespace: (parameterof (symbol -> symbol))
+  ;; Used to do additional translation of namespaces to something convenient.
+  (define translate-namespace (make-parameter (lambda (ns) ns)))
 
   
-  ;; normalize-attributes: 
+  ;; elem-gi->symbol: elem-gi -> symbol
+  ;; Translate an elem-gi (which is either itself a symbol or a pair of symbols)
+  ;; into a single symbol.
+  ;; FIXME: allow user to provide translational map of the namespace
+  ;; to something that they like.
+  (define (elem-gi->symbol elem-gi)
+    (cond
+      [(symbol? elem-gi) elem-gi]
+      [else (string->symbol
+             (string-append 
+              (symbol->string ((translate-namespace) (car elem-gi))) 
+              ":" 
+              (symbol->string (cdr elem-gi))))]))
+
+  
+  ;; normalize-attributes: (listof (elem-gi . string)) -> (listof (list symbol string))
+  ;; Forces attribute names to be symbols and restructures
+  ;; each attribute name/value pair into a list.
   (define (normalize-attributes attributes)
     (reverse 
      (foldl (lambda (x acc)
@@ -65,16 +82,24 @@
             attributes)))
 
   
-  ;; elem-gi->symbol: elem-gi -> symbol
-  (define (elem-gi->symbol elem-gi)
+  (define ((new-level-handler yield) elem-gi attributes namespaces expected-content seed)
     (cond
-      [(symbol? elem-gi) elem-gi]
-      [else (string->symbol
-             (string-append 
-              (symbol->string (car elem-gi)) 
-              ":" 
-              (symbol->string (cdr elem-gi))))]))
-  
+      [(pstate-collecting? seed) 
+       (copy-struct pstate seed [pstate-lst '()])]
+      [else
+       (let ([start-collecting?
+              (yield (make-start-element (elem-gi->symbol elem-gi) 
+                                         (normalize-attributes attributes) 
+                                         namespaces 
+                                         expected-content))])
+         (cond
+           [(eqv? start-collecting? #t)
+            (copy-struct pstate seed 
+                         [pstate-collecting? #t]
+                         [pstate-lst '()])]
+           [else seed]))]))
+
+      
   
   (define ((finish-element-handler yield) elem-gi attributes namespaces parent-seed seed)
 
@@ -82,7 +107,7 @@
       (pstate-extend parent-seed
                      `(,(elem-gi->symbol elem-gi)
                         (@ ,@(normalize-attributes attributes))
-                        ,@(normalize-strings (pstate-lst seed)))))
+                        ,@(rev-normalize-string-children (pstate-lst seed)))))
     (cond
       [(pstate-collecting? parent-seed)
        (combine elem-gi attributes)]
@@ -91,7 +116,9 @@
        (yield (first (pstate-lst (combine elem-gi attributes))))
        parent-seed]
       [else
-       (yield (make-end-element elem-gi attributes namespaces))
+       (yield (make-end-element (elem-gi->symbol elem-gi)
+                                (normalize-attributes attributes)
+                                namespaces))
        parent-seed]))
   
   
@@ -130,9 +157,10 @@
   ;;
   ;; where g is a generator.  We use a taffy to pull off morsels
   ;; of chewy XML.
-  (define-struct taffy (g))
+  (define-struct taffy (g last-morsel))
   
-  
+
+  (provide start-xml-pull)
   ;; start-xml-pull: input-port -> taffy
   (define (start-xml-pull ip)
     (define-generator (start-xml-pull ip)
@@ -143,36 +171,67 @@
               CHAR-DATA-HANDLER (char-data-handler yield))])
               ;; don't know how to properly handle PI's yet...
         (parser ip (make-pstate #f '()))))
-    (make-taffy (start-xml-pull ip)))
+    (make-taffy (start-xml-pull ip) #f))
 
   
-  ;; pull-event: taffy -> event
-  (define (pull-event a-taffy)
-    (generator-next (taffy-g a-taffy) (lambda (exn) (make-exhausted)) #f))
+  (provide pull-morsel)
+  ;; pull-morsel: taffy -> morsel
+  (define (pull-morsel a-taffy)
+    (let ([evt
+           (generator-next (taffy-g a-taffy) 
+                           (lambda (exn) (make-exhausted)) #f)])
+      (set-taffy-last-morsel! a-taffy evt)
+      evt))
 
   
-  ;; pull-sexp: taffy -> sexp
+  (provide pull-sexp)
+  ;; pull-sexp: taffy -> (union sexp exhaused)
   (define (pull-sexp a-taffy)
-    (generator-next (taffy-g a-taffy) (lambda (exn) (make-exhausted)) #t))
+    (unless (start-element? (taffy-last-morsel a-taffy))
+      (error 'pull-sexp 
+             "can only pull an sexp if the last morsel was a start-element, but was ~a"
+             (taffy-last-morsel a-taffy)))
+    (let ([evt
+           (generator-next (taffy-g a-taffy)
+                           (lambda (exn) (make-exhausted)) #t)])
+      (set-taffy-last-morsel! a-taffy evt)
+      evt))
   
-
+  
+  (provide pull-sexps/g)
   ;; pull-sexps/g: taffy symbol -> (generatorof sexp)
   (define-generator (pull-sexps/g a-taffy a-symbol)
-    (let loop ([event (pull-event a-taffy)])
+    (let loop ([morsel (pull-morsel a-taffy)])
       (cond
-        [(exhausted? event)
+        [(exhausted? morsel)
          (void)]
-        [(and (start-element? event)
-              (equal? a-symbol (start-element-elem-gi event)))
+        [(and (start-element? morsel)
+              (symbol=? a-symbol (start-element-name morsel)))
          (yield (pull-sexp a-taffy))
-         (loop (pull-event a-taffy))]
+         (loop (pull-morsel a-taffy))]
         [else 
-         (loop (pull-event a-taffy))])))
+         (loop (pull-morsel a-taffy))])))
   
-
-  (define (test-harness pulling-data trigger)
+  
+  
+;                              
+;                              
+;  @@@@@@@                     
+;  @  @  @                @    
+;     @    -@@$   :@@+@  @@@@@ 
+;     @    $  -$  @$ -@   @    
+;     @    @@@@@  :@@$-   @    
+;     @    $         *@   @    
+;     @    +:     @  :@   @: :$
+;    @@@    $@@+  $+@@:   :@@$-
+;                              
+;                              
+;                              
+;                              
+  
+  (define (test-harness a-taffy a-symbol)
     (generator-for-each (lambda (x) (pretty-print x) (newline)) 
-                        (pull-sexps/g pulling-data trigger)))
+                        (pull-sexps/g a-taffy a-symbol)))
   
   (define (test-data)
     (start-xml-pull (open-input-string 
@@ -200,12 +259,12 @@ EOF
     (test-harness 
      
      (start-xml-pull (open-input-file "~/Desktop/go_daily-termdb.rdf-xml")) 
-     '(http://www.geneontology.org/dtds/go.dtd# . term)))
+     'http://www.geneontology.org/dtds/go.dtd#:term))
 
   
-#;  (test1)
+  #;(test1)
 
-  (test2)
+  #;(test2)
   
   
   )
