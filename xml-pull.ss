@@ -21,12 +21,29 @@
            (struct start-element (name attributes))
            (struct end-element (name attributes))
            (struct characters (s1 s2))
-           (struct exhausted()))
+           (struct exhausted ()))
   ;; Add more morsels here as necessary.  I wonder if we'll want a start-document or end-document
   ;; morsel?
   
   
   
+  
+  
+;                                            
+;                                            
+;   @@@$-                                    
+;    @ -$                                    
+;    @  @   $@$:  @@-$+  :@@+@  -@@$   @@-$+ 
+;    @ -$     -@   @$ :  @$ -@  $  -$   @$ : 
+;    @@@-  -$@$@   @     :@@$-  @@@@@   @    
+;    @     $*  @   @        *@  $       @    
+;    @     @- *@   @     @  :@  +:      @    
+;   @@@    -$$-@@ @@@@@  $+@@:   $@@+  @@@@@ 
+;                                            
+;                                            
+;                                            
+;                                            
+
   
   ;; The parser state is a structure:
   ;;
@@ -162,7 +179,7 @@
   ;; where g is a generator.  We use a taffy to pull off morsels
   ;; of chewy XML.
   (define-struct taffy (g last-morsel))
-  
+  (provide taffy? taffy)
 
   (provide start-xml-pull)
   ;; start-xml-pull: input-port -> taffy

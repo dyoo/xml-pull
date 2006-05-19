@@ -22,7 +22,7 @@ Quick Example
 EOF
                                            )))
 
-At this point, we can either traverse this XML structure by morsels:
+At this point, we can consume this XML structure by morsels:
 
     > (pull-morsel a-taffy)
     #3(struct:start-element test-xml ())
@@ -31,11 +31,98 @@ At this point, we can either traverse this XML structure by morsels:
     > (pull-morsel a-taffy)
     #3(struct:start-element person ())
 
-When we see a start-element that is interesting to us, we can _pull-sexp_
+At this piont, we are at the start-element of a person.  When we
+see a start-element that is interesting to us, we can _pull-sexp_
 the rest of that element as a normalized SXML fragment:
 
     > (pull-sexp a-taffy)
     (person (@) (name (@) "Sue Rhee"))
 
+
+What's nice about this is that we only consume as much of the XML
+from our input-stream as we need, and moreover, memory usage is
+bounded to the amount of memory needed to represent the
+fragment.
     
+
+Structures
+----------
+
+There are two structures in this module: taffy and morsel.
+
+    * taffy
+
+      A _taffy_ is a core structure that maintains the state of
+      the XML parse.  Conceptually, a taffy is an iterator of morsels
+      and SXML fragments.
+
+
+    * morsel
+
+      A _morsel_ is one of the following:
+
+      * (make-start-element n a)
+         where n is a symbol and a is a (listof (list symbol string))
     
+      * (make-end-element n a)
+         where n is a symbol and a is a (listof (list symbol string))
+
+      * (make-characters s1 s2)
+         where s1 and s2 are strings
+       
+      * (make-exhausted)
+
+      Most of these are self-explanatory.  We produce an _exhausted_
+      structure when there are no more elements in the xml
+      to parse.
+    
+
+
+Functions
+---------
+
+> start-xml-pull: input-port -> taffy
+
+Given an input-port, starts the XML parse and returns a taffy.
+
+
+> pull-morsel: taffy -> morsel
+
+Takes a taffy and rips off a morsel.
+
+
+> pull-sexp: taffy -> (union sexp exhausted)
+
+Assuming that the very last morsel that is pulled off is a start-element,
+pulls enough morsels to reproduce that element.  If the last morsel is not
+a start-event, raises an error.
+
+
+> pull-sexps/g: taffy symbol -> (generatorof sexp)
+
+The resulting function is a _generator_ whose elements are s-expressions those
+names match the given input name.
+
+See http://planet.plt-scheme.org/#generator.plt2.0 for more details.
+
+
+Parameters
+----------
+
+> current-namespace-translate: symbol -> symbol
+
+
+
+
+
+More examples
+-------------
+
+
+
+Thanks
+------
+
+
+References
+----------
