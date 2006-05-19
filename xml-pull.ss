@@ -3,7 +3,7 @@
   (require (lib "etc.ss")
            (lib "struct.ss")
            (lib "pretty.ss")
-           (only (lib "list.ss") first)
+           (only (lib "list.ss") first foldl)
            (planet "ssax.ss" ("lizorkin" "ssax.plt" 1 3))
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
   
@@ -49,13 +49,36 @@
                          [pstate-collecting? #t]
                          [pstate-lst '()])]
            [else seed]))]))
+
+  
+  ;; normalize-attributes: 
+  (define (normalize-attributes attributes)
+    (reverse 
+     (foldl (lambda (x acc)
+              (cons (list (elem-gi->symbol (car x))
+                          (cdr x))
+                    acc))
+            '()
+            attributes)))
+
+  
+  ;; elem-gi->symbol: elem-gi -> symbol
+  (define (elem-gi->symbol elem-gi)
+    (cond
+      [(symbol? elem-gi) elem-gi]
+      [else (string->symbol
+             (string-append 
+              (symbol->string (car elem-gi)) 
+              ":" 
+              (symbol->string (cdr elem-gi))))]))
   
   
   (define ((finish-element-handler yield) elem-gi attributes namespaces parent-seed seed)
+
     (define (combine elem-gi attributes)
       (pstate-extend parent-seed
-                     `(,elem-gi
-                        (@ ,@attributes)
+                     `(,(elem-gi->symbol elem-gi)
+                        (@ ,@(normalize-attributes attributes))
                         ,@(normalize-strings (pstate-lst seed)))))
     (cond
       [(pstate-collecting? parent-seed)
@@ -111,7 +134,7 @@
          (yield (pull-sexp pulling-data))
          (loop (pull-event pulling-data))]
         [else 
-         (yield event)
+         ;(yield event)
          (loop (pull-event pulling-data))])))
 
   (define (test-harness pulling-data trigger)
