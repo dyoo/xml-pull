@@ -8,16 +8,19 @@
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
   
   
+  ;; This is an implementation of a pull-style parser.
+
+  
+  
   ;; An event is one of the following:
   (define-struct event () #f)
   (define-struct (start-element event) (elem-gi attributes namespaces expected-content) #f)
   (define-struct (end-element event) (elem-gi attributes namespaces) #f)
   (define-struct (characters event) (s1 s2) #f)
-
   (define-struct (exhausted event) ())
-
-
-  ;; add more events here...
+  ;; add more events here as necessary
+  
+  
   
   
   ;; The parser state is a structure:
@@ -103,43 +106,73 @@
        seed]))
   
   
-  ;; xml-pull: input-port -> generator
-  (define-generator (start-xml-pull ip)
-    (local 
-        [(define parser
-           (ssax:make-parser
-            NEW-LEVEL-SEED (new-level-handler yield)
-            FINISH-ELEMENT (finish-element-handler yield)
-            CHAR-DATA-HANDLER (char-data-handler yield)
-            ;; don't know how to properly handle PI's yet...
-            ))]
-      (parser ip (make-pstate #f '()))))
-  
-  
-  (define (pull-event pulling-data)
-    (generator-next pulling-data (lambda (exn) (make-exhausted)) #f))
 
-  (define (pull-sexp pulling-data)
-    (generator-next pulling-data (lambda (exn) (make-exhausted)) #t))
   
-    
+  
+;                                     
+;                                     
+;                  :@@$   :@@$        
+;    @             @:     @:          
+;   @@@@@   $@$:  @@@@@  @@@@@ @@@ @@@
+;    @        -@   @      @     $-  $-
+;    @     -$@$@   @      @     -$  $ 
+;    @     $*  @   @      @      $*$: 
+;    @: :$ @- *@   @      @       $$  
+;    :@@$- -$$-@@ @@@@@  @@@@@    $*  
+;                                 $   
+;                               @@@@  
+;                                     
+;                                     
+  
+  ;; A taffy is a structure:
+  ;;
+  ;; (make-taffy g)
+  ;;
+  ;; where g is a generator.  We use a taffy to pull off morsels
+  ;; of chewy XML.
+  (define-struct taffy (g))
+  
+  
+  ;; start-xml-pull: input-port -> taffy
+  (define (start-xml-pull ip)
+    (define-generator (start-xml-pull ip)
+      (let ([parser
+             (ssax:make-parser
+              NEW-LEVEL-SEED (new-level-handler yield)
+              FINISH-ELEMENT (finish-element-handler yield)
+              CHAR-DATA-HANDLER (char-data-handler yield))])
+              ;; don't know how to properly handle PI's yet...
+        (parser ip (make-pstate #f '()))))
+    (make-taffy (start-xml-pull ip)))
 
-  (define-generator (triggered-pull pulling-data trigger)
-    (let loop ([event (pull-event pulling-data)])
+  
+  ;; pull-event: taffy -> event
+  (define (pull-event a-taffy)
+    (generator-next (taffy-g a-taffy) (lambda (exn) (make-exhausted)) #f))
+
+  
+  ;; pull-sexp: taffy -> sexp
+  (define (pull-sexp a-taffy)
+    (generator-next (taffy-g a-taffy) (lambda (exn) (make-exhausted)) #t))
+  
+
+  ;; pull-sexps/g: taffy symbol -> (generatorof sexp)
+  (define-generator (pull-sexps/g a-taffy a-symbol)
+    (let loop ([event (pull-event a-taffy)])
       (cond
         [(exhausted? event)
          (void)]
         [(and (start-element? event)
-              (equal? trigger (start-element-elem-gi event)))
-         (yield (pull-sexp pulling-data))
-         (loop (pull-event pulling-data))]
+              (equal? a-symbol (start-element-elem-gi event)))
+         (yield (pull-sexp a-taffy))
+         (loop (pull-event a-taffy))]
         [else 
-         ;(yield event)
-         (loop (pull-event pulling-data))])))
+         (loop (pull-event a-taffy))])))
+  
 
   (define (test-harness pulling-data trigger)
     (generator-for-each (lambda (x) (pretty-print x) (newline)) 
-                        (triggered-pull pulling-data trigger)))
+                        (pull-sexps/g pulling-data trigger)))
   
   (define (test-data)
     (start-xml-pull (open-input-string 
