@@ -1,7 +1,6 @@
 (module xml-pull mzscheme
   (require (lib "etc.ss")
            (lib "struct.ss")
-           (lib "pretty.ss")
            (only (lib "list.ss") first foldl)
            (planet "ssax.ss" ("lizorkin" "ssax.plt" 1 3))
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
@@ -13,10 +12,16 @@
   
   ;; An morsel is one of the following:
   (define-struct morsel () #f)
-  (define-struct (start-element morsel) (name attributes namespaces expected-content) #f)
-  (define-struct (end-element morsel) (name attributes namespaces) #f)
+  (define-struct (start-element morsel) (name attributes) #f)
+  (define-struct (end-element morsel) (name attributes) #f)
   (define-struct (characters morsel) (s1 s2) #f)
-  (define-struct (exhausted morsel) ())
+  (define-struct (exhausted morsel) () #f)
+
+  (provide (struct morsel ())
+           (struct start-element (name attributes))
+           (struct end-element (name attributes))
+           (struct characters (s1 s2))
+           (struct exhausted()))
   ;; Add more morsels here as necessary.  I wonder if we'll want a start-document or end-document
   ;; morsel?
   
@@ -48,10 +53,11 @@
   
   
   
-  (provide translate-namespace)
-  ;; translate-namespace: (parameterof (symbol -> symbol))
+  (provide current-namespace-translate)
+  ;; current-namespace-translate: (parameterof (symbol -> symbol))
   ;; Used to do additional translation of namespaces to something convenient.
-  (define translate-namespace (make-parameter (lambda (ns) ns)))
+  (define current-namespace-translate 
+    (make-parameter (lambda (ns) ns)))
 
   
   ;; elem-gi->symbol: elem-gi -> symbol
@@ -62,11 +68,12 @@
   (define (elem-gi->symbol elem-gi)
     (cond
       [(symbol? elem-gi) elem-gi]
-      [else (string->symbol
-             (string-append 
-              (symbol->string ((translate-namespace) (car elem-gi))) 
-              ":" 
-              (symbol->string (cdr elem-gi))))]))
+      [else
+       (string->symbol
+        (string-append 
+         (symbol->string ((current-namespace-translate) (car elem-gi))) 
+         ":" 
+         (symbol->string (cdr elem-gi))))]))
 
   
   ;; normalize-attributes: (listof (elem-gi . string)) -> (listof (list symbol string))
@@ -89,9 +96,7 @@
       [else
        (let ([start-collecting?
               (yield (make-start-element (elem-gi->symbol elem-gi) 
-                                         (normalize-attributes attributes) 
-                                         namespaces 
-                                         expected-content))])
+                                         (normalize-attributes attributes)))])
          (cond
            [(eqv? start-collecting? #t)
             (copy-struct pstate seed 
@@ -117,8 +122,7 @@
        parent-seed]
       [else
        (yield (make-end-element (elem-gi->symbol elem-gi)
-                                (normalize-attributes attributes)
-                                namespaces))
+                                (normalize-attributes attributes)))
        parent-seed]))
   
   
@@ -163,7 +167,7 @@
   (provide start-xml-pull)
   ;; start-xml-pull: input-port -> taffy
   (define (start-xml-pull ip)
-    (define-generator (start-xml-pull ip)
+    (define-generator (start-parsing ip)
       (let ([parser
              (ssax:make-parser
               NEW-LEVEL-SEED (new-level-handler yield)
@@ -171,7 +175,7 @@
               CHAR-DATA-HANDLER (char-data-handler yield))])
               ;; don't know how to properly handle PI's yet...
         (parser ip (make-pstate #f '()))))
-    (make-taffy (start-xml-pull ip) #f))
+    (make-taffy (start-parsing ip) #f))
 
   
   (provide pull-morsel)
@@ -210,61 +214,4 @@
          (yield (pull-sexp a-taffy))
          (loop (pull-morsel a-taffy))]
         [else 
-         (loop (pull-morsel a-taffy))])))
-  
-  
-  
-;                              
-;                              
-;  @@@@@@@                     
-;  @  @  @                @    
-;     @    -@@$   :@@+@  @@@@@ 
-;     @    $  -$  @$ -@   @    
-;     @    @@@@@  :@@$-   @    
-;     @    $         *@   @    
-;     @    +:     @  :@   @: :$
-;    @@@    $@@+  $+@@:   :@@$-
-;                              
-;                              
-;                              
-;                              
-  
-  (define (test-harness a-taffy a-symbol)
-    (generator-for-each (lambda (x) (pretty-print x) (newline)) 
-                        (pull-sexps/g a-taffy a-symbol)))
-  
-  (define (test-data)
-    (start-xml-pull (open-input-string 
-               #<<EOF
-<test-xml>
-<person>
-    <name>Sue Rhee</name>
-</person>
-<person>
-    <name>Dan Garcia</name>
-</person>
-<person>
-    <name>Mike Clancy</name>
-</person>
-</test-xml>
-EOF
-               )))
-  
-  
-  (define (test1)
-    (test-harness (test-data) 'person))
-  
-  
-  (define (test2)
-    (test-harness 
-     
-     (start-xml-pull (open-input-file "~/Desktop/go_daily-termdb.rdf-xml")) 
-     'http://www.geneontology.org/dtds/go.dtd#:term))
-
-  
-  #;(test1)
-
-  #;(test2)
-  
-  
-  )
+         (loop (pull-morsel a-taffy))]))))
