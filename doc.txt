@@ -22,7 +22,7 @@ Quick Example
 EOF
                                            )))
 
-At this point, we can consume this XML structure by morsels:
+We can consume this XML structure by morsels:
 
     > (pull-morsel a-taffy)
     #3(struct:start-element test-xml ())
@@ -31,7 +31,7 @@ At this point, we can consume this XML structure by morsels:
     > (pull-morsel a-taffy)
     #3(struct:start-element person ())
 
-At this piont, we are at the start-element of a person.  When we
+At this point, we are at the start-element of a person.  When we
 see a start-element that is interesting to us, we can _pull-sexp_
 the rest of that element as a normalized SXML fragment:
 
@@ -100,8 +100,8 @@ a start-event, raises an error.
 
 > pull-sexps/g: taffy symbol -> (generatorof sexp)
 
-The resulting function is a _generator_ whose elements are s-expressions those
-names match the given input name.
+The result is a _generator_ whose elements are s-expressions those
+names match the given input symbol.
 
 See http://planet.plt-scheme.org/#generator.plt2.0 for more details.
 
@@ -111,18 +111,68 @@ Parameters
 
 > current-namespace-translate: symbol -> symbol
 
+If provided, this is used to translate the namespace portion of
+element names in an XML document.  By default, this is bound to the
+identity function.  (This is experimental --- I might remove this in
+a later release of this software in favor of a simpler substitution
+map similar to what ssax:xml->sxml takes in.)
 
 
 
+More extenstive example
+-----------------------
 
-More examples
--------------
+Here is code that takes a large XML document --- the collection of common ontology
+terms used in bioinformatics --- and prints out the first hundred terms:
+
+
+(module test-xml-pull-2 mzscheme
+  (require (lib "url.ss" "net")
+           (lib "inflate.ss")
+           (lib "pretty.ss")
+           (planet "xml-pull.ss" ("dyoo" "xml-pull.plt" 1 0))
+           (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
+
+  ;; wrap-gunzip: input-port input-port
+  ;; Wraps an uncompressor around the input stream.
+  (define (wrap-gunzip original-ip)
+    (define-values (ip op) (make-pipe))
+    (thread (lambda () (gunzip-through-ports original-ip op)))
+    ip)
+
+  (define my-url
+    (string->url "http://archive.godatabase.org/latest-termdb/go_daily-termdb.rdf-xml.gz"))
+
+  (define my-input-port (wrap-gunzip (get-pure-port my-url)))
+  
+  (define my-taffy (start-xml-pull my-input-port))
+  
+  (define generated-terms (pull-sexps/g my-taffy 'http://www.geneontology.org/dtds/go.dtd#:term))
+  
+  ;; pretty-print the first 100 terms in the Gene Ontology
+  (let loop ([i 0])
+    (when (< i 100)
+      (pretty-print (generator-next generated-terms))
+      (loop (add1 i)))))
+
 
 
 
 Thanks
 ------
 
+Thanks to the PLT folks for writing tools that are very enjoyable
+to play with.  Special thanks to the bioinformaticians at
+TAIR (http://arabidopsis.org) who taught me to appreciate
+very large XML datasets.
+
+
 
 References
 ----------
+
+SSAX (http://ssax.sourceforge.net/)
+
+SXML (http://okmij.org/ftp/Scheme/SXML.html)
+
+About Pulldom and Minidom (http://www.prescod.net/python/pulldom.html)
