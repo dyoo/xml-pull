@@ -1,0 +1,10 @@
+(module info (lib "infotab.ss" "setup")
+  (define name "xml-pull")
+  (define blurb '("pull-style parsing for very large xml documents."))
+  (define categories '(misc))
+  (define doc.txt "doc.txt")
+  (define homepage "http://hkn.eecs.berkeley.edu/~dyoo/plt/xml-pull/index.html")
+  (define primary-file "xml-pull.ss")
+  (define version "1.0")
+  
+  )
