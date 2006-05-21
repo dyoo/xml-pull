@@ -136,7 +136,7 @@ terms used in bioinformatics --- and prints out the first hundred terms:
   ;; wrap-gunzip: input-port input-port
   ;; Wraps an uncompressor around the input stream.
   (define (wrap-gunzip original-ip)
-    (define-values (ip op) (make-pipe))
+    (define-values (ip op) (make-pipe 32768))
     (thread (lambda () (gunzip-through-ports original-ip op)))
     ip)
 
