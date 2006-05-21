@@ -61,11 +61,13 @@ There are two structures in this module: taffy and morsel.
 
       A _morsel_ is one of the following:
 
-      * (make-start-element n a)
-         where n is a symbol and a is a (listof (list symbol string))
+      * (make-start-element name attributes)
+         where name is a symbol and attributes is
+         a (listof (list symbol string))
     
       * (make-end-element n a)
-         where n is a symbol and a is a (listof (list symbol string))
+         where name is a symbol and attributes is
+         a (listof (list symbol string))
 
       * (make-characters s1 s2)
          where s1 and s2 are strings
@@ -75,7 +77,28 @@ There are two structures in this module: taffy and morsel.
       Most of these are self-explanatory.  We produce an _exhausted_
       structure when there are no more elements in the xml
       to parse.
-    
+
+The expected predicates and selectors are also available:    
+
+> taffy? : any -> boolean
+
+> morsel? : any -> boolean
+
+> start-element? : any -> boolean
+
+> end-element? : any -> boolean
+
+> characters? : any -> boolean
+
+> exhausted? : any -> boolean
+
+> start-element-name : start-element -> symbol
+
+> start-element-attributes : start-element -> (listof (list symbol string))
+
+> end-element-name: end-element -> symbol
+
+> end-element-attributes end-element -> (listof (list symbol string))
 
 
 Functions
@@ -133,7 +156,7 @@ terms used in bioinformatics --- and prints out the first hundred terms:
            (planet "xml-pull.ss" ("dyoo" "xml-pull.plt" 1 0))
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
 
-  ;; wrap-gunzip: input-port input-port
+  ;; wrap-gunzip: input-port -> input-port
   ;; Wraps an uncompressor around the input stream.
   (define (wrap-gunzip original-ip)
     (define-values (ip op) (make-pipe 32768))
