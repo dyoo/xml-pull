@@ -3,7 +3,7 @@
            (lib "inflate.ss")
            (lib "pretty.ss")
            (lib "port.ss")
-           (planet "xml-pull.ss" ("dyoo" "xml-pull.plt" 1 0))
+           "xml-pull.ss"
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
 
   ;; wrap-gunzip: input-port input-port

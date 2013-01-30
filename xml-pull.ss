@@ -2,7 +2,7 @@
   (require (lib "etc.ss")
            (lib "struct.ss")
            (only (lib "list.ss") first foldl)
-           (planet "ssax.ss" ("lizorkin" "ssax.plt" 1 3))
+           (planet "ssax.ss" ("lizorkin" "ssax.plt" 2 0))
            (planet "generator.ss" ("dyoo" "generator.plt" 2 0)))
   
   
