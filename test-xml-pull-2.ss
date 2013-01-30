@@ -15,7 +15,7 @@
 
   
   (define my-url
-    (string->url "http://archive.godatabase.org/latest-termdb/go_daily-termdb.rdf-xml.gz"))
+    (string->url "http://archive.geneontology.org/latest-termdb/go_daily-termdb.rdf-xml.gz"))
   (define my-input-port (wrap-gunzip (get-pure-port my-url)))
   
   (define my-taffy (start-xml-pull my-input-port))
